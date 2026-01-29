@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JSON Viewer</title>
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+
+  <!-- Alpine.js CDN -->
+  <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+
+  <style>
+    .error-line {
+      background-color: rgba(239, 68, 68, 0.1);
+      border-left: 3px solid #ef4444;
+      display: block;
+    }
+
+    .line-numbers {
+      counter-reset: line;
+    }
+
+    .line-numbers .line {
+      counter-increment: line;
+      position: relative;
+      padding-left: 3.5em;
+    }
+
+    .line-numbers .line::before {
+      content: counter(line);
+      position: absolute;
+      left: 0;
+      width: 3em;
+      text-align: right;
+      padding-right: 0.5em;
+      color: #94a3b8;
+      user-select: none;
+      border-right: 1px solid #e2e8f0;
+    }
+  </style>
+</head>
+
+<body class="m-0 p-0 h-screen overflow-hidden">
+  <div id="app" x-data="jsonViewerApp()" class="w-full h-full flex flex-col p-4 bg-orange-50 text-slate-800">
+
+    <!-- HEADER -->
+    <header class="mb-4 text-center shrink-0">
+      <h1 class="text-3xl font-bold">JSON Viewer</h1>
+    </header>
+
+    <!-- MAIN -->
+    <main class="flex-1 overflow-hidden">
+      <div class="flex flex-col md:flex-row gap-4 h-full">
+
+        <!-- INPUT -->
+        <section class="flex-1 flex flex-col overflow-hidden">
+          <h2 class="text-xl font-semibold mb-2">Input JSON</h2>
+
+          <textarea
+            x-model="inputJson"
+            @input="handleTyping"
+            @paste="handlePaste"
+            class="flex-1 p-3 border border-slate-300 rounded-md resize-none font-mono text-sm focus:outline-none"
+            :class="{ 'border-red-400': error }"
+            placeholder="Paste your JSON here..."
+          ></textarea>
+
+          <!-- ERROR -->
+          <div x-show="error" class="mt-2 p-3 bg-red-50 border border-red-200 rounded">
+            <p class="text-red-700 font-semibold text-sm">
+              ❌ <span x-text="error"></span>
+            </p>
+            <template x-if="errorMeta">
+              <p class="text-red-600 text-xs mt-1">
+                Line <span x-text="errorMeta.line"></span>,
+                Column <span x-text="errorMeta.column"></span>
+              </p>
+            </template>
+          </div>
+        </section>
+
+        <!-- OUTPUT -->
+        <section class="flex-1 flex flex-col overflow-hidden">
+          <div class="flex items-center justify-between mb-2">
+            <h2 class="text-xl font-semibold">Formatted JSON</h2>
+
+            <button
+              x-show="formattedJson"
+              @click="navigator.clipboard.writeText(formattedJson)"
+              class="p-2 px-3 rounded bg-white border shadow hover:bg-slate-50 text-sm"
+            >
+              📋 Copy
+            </button>
+          </div>
+
+          <div class="flex-1 border border-slate-300 rounded bg-white overflow-auto relative">
+            <pre
+              x-show="formattedJson"
+              class="p-3 font-mono text-sm line-numbers h-full m-0"
+            ><code x-html="highlightedJson"></code></pre>
+
+            <div
+              x-show="!formattedJson"
+              class="absolute inset-0 flex items-center justify-center text-slate-400 text-sm"
+            >
+              Valid JSON will appear here
+            </div>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <!-- FOOTER -->
+    <footer class="py-3 text-center text-sm text-slate-600 mt-4">
+      © <span x-text="new Date().getFullYear()"></span> JSON Viewer
+    </footer>
+  </div>
+
+  <script>
+    function jsonViewerApp() {
+      return {
+        inputJson: '',
+        formattedJson: '',
+        highlightedJson: '',
+        error: null,
+        errorMeta: null,
+        errorLineNumber: null,
+
+        handleTyping() {
+          this.validate()
+        },
+
+        handlePaste() {
+          setTimeout(() => this.validate(), 10)
+        },
+
+        validate() {
+          if (!this.inputJson.trim()) {
+            this.clear()
+            return
+          }
+
+          try {
+            const parsed = JSON.parse(this.inputJson)
+            this.formattedJson = JSON.stringify(parsed, null, 2)
+            this.clearError()
+            this.createHighlightedOutput()
+          } catch (err) {
+            this.parseJsonError(err)
+            this.formattedJson = ''
+            this.highlightedJson = ''
+          }
+        },
+
+        createHighlightedOutput() {
+          const lines = this.formattedJson.split('\n')
+          this.highlightedJson = lines.map((line, i) => {
+            const cls = this.errorLineNumber === i + 1
+              ? 'line error-line'
+              : 'line'
+            return `<span class="${cls}">${this.escapeHtml(line)}</span>`
+          }).join('\n')
+        },
+
+        parseJsonError(err) {
+          const msg = err.message || String(err)
+          const match = msg.match(/position (\d+)/i)
+
+          if (match) {
+            const index = Number(match[1])
+            const { line, column } = this.indexToLineColumn(this.inputJson, index)
+            this.errorMeta = { line, column }
+            this.errorLineNumber = line
+          }
+
+          this.error = msg.replace(/^SyntaxError:\s*/, '')
+        },
+
+        indexToLineColumn(text, index) {
+          const lines = text.slice(0, index).split('\n')
+          return {
+            line: lines.length,
+            column: lines[lines.length - 1].length + 1
+          }
+        },
+
+        clear() {
+          this.formattedJson = ''
+          this.highlightedJson = ''
+          this.clearError()
+        },
+
+        clearError() {
+          this.error = null
+          this.errorMeta = null
+          this.errorLineNumber = null
+        },
+
+        escapeHtml(text) {
+          return text.replace(/[&<>"']/g, c =>
+            ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;' }[c])
+          )
+        }
+      }
+    }
+  </script>
+</body>
+</html>
