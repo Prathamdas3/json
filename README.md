@@ -16,21 +16,15 @@ A lightweight, real-time JSON validator and formatter with beautiful syntax high
 
 ### Main Interface
 
-```
-[Add screenshot of the main interface with the two-pane layout showing input and output panels]
-```
+![Main ui image](./main.png)
 
 ### Valid JSON Example
 
-```
-[Add screenshot showing valid JSON with formatted output and line numbers]
-```
+![nested json image](./nested_json.png)
 
 ### Error Detection
 
-```
-[Add screenshot showing error message with line and column highlighting]
-```
+![error in json image](./error_json.png)
 
 ## Installation
 
